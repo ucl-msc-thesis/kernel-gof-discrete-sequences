@@ -1,0 +1,108 @@
+Index: .gitignore
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.gitignore b/.gitignore
+--- a/.gitignore	(revision 98c92630a858a1a921614888a9c112e8905e125c)
++++ b/.gitignore	(revision 706b378f103f385fe99cceb6e8cf0506c49f52f8)
+@@ -1,2 +1,5 @@
+ *.pyc
+ .directory
++/string_kernel.c
++/string_kernel.*.so
++/build/
+Index: setup.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/setup.py b/setup.py
+new file mode 100644
+--- /dev/null	(revision 706b378f103f385fe99cceb6e8cf0506c49f52f8)
++++ b/setup.py	(revision 706b378f103f385fe99cceb6e8cf0506c49f52f8)
+@@ -0,0 +1,19 @@
++from setuptools import setup
++from Cython.Build import cythonize
++from distutils.extension import Extension
++
++import numpy
++
++
++extensions = [
++    Extension("string_kernel", ["string_kernel.pyx"],
++        include_dirs=[numpy.get_include()],
++        libraries=[],
++        library_dirs=[]),
++]
++
++
++setup(
++    ext_modules = cythonize(extensions)
++)
++
+Index: string_kernel.pyx
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/string_kernel.pyx b/string_kernel.pyx
+--- a/string_kernel.pyx	(revision 0ef93e1c0c7785c410dee9969bb9a7b68f81e9dc)
++++ b/string_kernel.pyx	(revision c0385f9ae4aa529a205ffec4fe67be96ee37153b)
+@@ -28,7 +28,7 @@
+     lens, lent = len(s), len(t)
+     #k_prim = (-1)*np.ones( (n+1, lens, lent) )
+     cdef np.ndarray[np.float64_t, ndim=3] \
+-        k_prim = np.zeros((n, lens, lent), dtype=np.float)
++        k_prim = np.zeros((n, lens, lent), dtype=float)
+ 
+     k_prim[0,:,:] = 1
+ 
+@@ -45,7 +45,7 @@
+     cdef int start = 0 if accum else n-1
+     cdef float k = 0.
+ 
+-    for i in range(n):
++    for i in range(start, n):
+         for sj in range(i,lens):
+             for tk in range(i,lent):
+                 if s[sj]==t[tk]:
+@@ -54,7 +54,7 @@
+     # print( [len(list(i for (sj,tk,i) in k_prim if i==m-1)) for m in range(n)] )
+     return k
+ 
+-def string_kernel(xs, ys, n, lbda):
++def string_kernel(xs, ys, n, lbda, accum=True, normalize=True):
+     """xs and ys are numpy arrays of strings or arrays of ints, n an integer and lbda a bool"""
+     if len(xs.shape) != 2 or len(ys.shape) != 2 or xs.shape[1] != 1 or ys.shape[1] != 1:
+         raise "The shape of the features is wrong, it must be (n,1)"
+@@ -73,21 +73,24 @@
+     if lenxs == lenys and np.array_equal(xs, ys):
+         for i in range(lenxs):
+             for j in range(i,lenys):
+-                mat[j,i] = mat[i,j] = ssk_fun(xs[i,0], ys[j,0], n, lbda, accum=True)
++                mat[j,i] = mat[i,j] = ssk_fun(xs[i,0], ys[j,0], n, lbda, accum)
+ 
+         mat_xs = mat_ys = mat.diagonal().reshape((lenxs, 1))
+ 
+     else:
+         for i in range(lenxs):
+             for j in range(lenys):
+-                mat[i,j] = ssk_fun(xs[i,0], ys[j,0], n, lbda, accum=True)
++                mat[i,j] = ssk_fun(xs[i,0], ys[j,0], n, lbda, accum)
+ 
+         mat_xs = np.zeros((lenxs, 1))
+         mat_ys = np.zeros((lenys, 1))
+ 
+         for i in range(lenxs):
+-            mat_xs[i] = ssk_fun(xs[i,0], xs[i,0], n, lbda, accum=True)
++            mat_xs[i] = ssk_fun(xs[i,0], xs[i,0], n, lbda, accum)
+         for j in range(lenys):
+-            mat_ys[j] = ssk_fun(ys[j,0], ys[j,0], n, lbda, accum=True)
++            mat_ys[j] = ssk_fun(ys[j,0], ys[j,0], n, lbda, accum)
+ 
+-    return np.divide(mat, np.sqrt(mat_ys.T * mat_xs))
++    if normalize:
++        return np.divide(mat, np.maximum(np.sqrt(mat_ys.T * mat_xs), np.finfo(float).eps))
++    else:
++        return mat

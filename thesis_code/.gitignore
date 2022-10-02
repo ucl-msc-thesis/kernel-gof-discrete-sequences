@@ -1,0 +1,6 @@
+/annotations/
+/annotations_trainval2014.zip
+/__pycache__/
+/dask-worker-space/
+/pretrained/
+/archive/02-features.nc
